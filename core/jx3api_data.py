@@ -1156,7 +1156,7 @@ class JX3APIService:
             ]
             
         return await self._request_api(
-            path="/card/cached",
+            path="/card/record",
             params={"server": server, "name": name, "token": self.token},
             processor=processor,
             template=""
