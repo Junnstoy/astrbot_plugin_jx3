@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
+
+from astrbot.api import logger
 
 if TYPE_CHECKING:
     from astrbot.api.event import AstrMessageEvent
     from astrbot.api.star import Context
-
-logger = logging.getLogger(__name__)
 
 
 class TeamBlacklistError(RuntimeError):
