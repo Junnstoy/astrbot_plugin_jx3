@@ -400,30 +400,16 @@ class Jx3ApiPlugin(Star):
         return text.split()
 
     def resolve_command(self, event: AstrMessageEvent):
-        """从 AstrBot 处理后文本和平台原始文本中识别本插件指令。"""
-        processed_text = event.message_str
-        original_text = getattr(event.message_obj, "message_str", "")
-        seen = set()
-
-        for text in (processed_text, original_text):
-            if not isinstance(text, str):
-                continue
-
-            text = text.strip()
-            if not text or text in seen:
-                continue
-            seen.add(text)
-
-            parts = self.parse_message(text)
-            if not parts:
-                continue
-
-            cmd, *args = parts
-            handler = self.command_map.get(cmd)
-            if handler:
-                return cmd, args, handler
-
-        return None
+        """先遵循宿主的唤醒判定，再解析插件前缀与指令。"""
+        if not event.is_at_or_wake_command:
+            return None
+        # 宿主已按当前会话的配置剥离唤醒头；回看原文会绕过这一层规则。
+        parts = self.parse_message(event.message_str)
+        if not parts:
+            return None
+        cmd, *args = parts
+        handler = self.command_map.get(cmd)
+        return (cmd, args, handler) if handler else None
 
     async def _prepare_server_args(
         self,
