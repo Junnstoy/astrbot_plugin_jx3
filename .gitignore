@@ -7,6 +7,10 @@ __pycache__/
 tests/*
 !tests/test_safety.py
 !tests/test_command_routing.py
+!tests/test_cache.py
+!tests/test_attribute.py
+!tests/test_chitu.py
+!tests/test_equipment.py
 .pytest_cache/
 .coverage
 .coverage.*

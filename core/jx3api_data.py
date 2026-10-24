@@ -475,10 +475,20 @@ class JX3APIService:
             
             result_lines = ["今日赤兔"]
             for item in data:
+                timestamp = format_time(item.get("time"))
+                window = item.get("window")
+                time_text = (
+                    f"{item.get('date') or timestamp[:10]} {window}".strip()
+                    if window
+                    else timestamp or item.get("date") or "未知"
+                )
                 result_lines.extend([
-                    f"时间：{item['date']}",
-                    f"区服：{item['server']}",
-                    f"地图：{item['mapName']}",
+                    f"时间：{time_text}",
+                    f"区服：{item.get('server') or '未知'}",
+                    f"地图：{item.get('mapName') or '未知'}",
+                    f"马匹：{item.get('horse') or '赤兔'}",
+                    f"状态：{item.get('status') or '未知'}",
+                    "",
                 ])
 
             return_data["data"] = "\n".join(result_lines).rstrip()
@@ -501,10 +511,20 @@ class JX3APIService:
             
             result_lines = ["本周赤兔"]
             for item in data:
+                timestamp = format_time(item.get("time"))
+                window = item.get("window")
+                time_text = (
+                    f"{item.get('date') or timestamp[:10]} {window}".strip()
+                    if window
+                    else timestamp or item.get("date") or "未知"
+                )
                 result_lines.extend([
-                    f"时间：{item['date']}",
-                    f"区服：{item['server']}",
-                    f"地图：{item['mapName']}",
+                    f"时间：{time_text}",
+                    f"区服：{item.get('server') or '未知'}",
+                    f"地图：{item.get('mapName') or '未知'}",
+                    f"马匹：{item.get('horse') or '赤兔'}",
+                    f"状态：{item.get('status') or '未知'}",
+                    "",
                 ])
 
             return_data["data"] = "\n".join(result_lines).rstrip()
@@ -1132,8 +1152,150 @@ class JX3APIService:
             params={"token": self.token, "server": server, "limit": limit},
             processor=processor,
             template="zhueevent.html"
-        ) 
+        )
 
+    async def zhuangbei_menu(self, server: str, name: str) -> dict[str, Any]:
+        """Build a selection menu from the role's recorded equipment sets.
+
+        Args:
+            server: Server name accepted by JX3API.
+            name: Role name whose records are queried.
+
+        Returns:
+            Menu title and numbered options retaining the detail query fields.
+
+        Raises:
+            ValueError: The API fails or returns no selectable equipment records.
+        """
+        data, _ = await self._cached_request(
+            "/calcd/records", {"server": server, "name": name, "token": self.token}
+        )
+        if isinstance(data, APIErrorResponse):
+            raise ValueError(data.message or "获取角色装备记录失败")
+        if not isinstance(data, dict):
+            raise ValueError("未获取到角色装备记录")
+        server_name = data.get("serverName") or server
+        role_name = data.get("roleName") or name
+        options = {}
+        for record in data.get("equipList") or []:
+            if not isinstance(record, dict):
+                continue
+            if not record.get("kungfuName") or not record.get("equipType"):
+                continue
+            options[str(len(options) + 1)] = {
+                **record,
+                "label": f"{record['kungfuName']} {record['equipType']}",
+                "serverName": server_name,
+                "roleName": role_name,
+            }
+        if not options:
+            raise ValueError("未搜索到装备记录")
+        return {"title": f"{server_name}-{role_name}", "options": options}
+
+    async def shuxing(
+        self, server: str, name: str, selected: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """Query calculated attributes and attach the optional role card.
+
+        Args:
+            server: Server name accepted by JX3API.
+            name: Role name to query.
+            selected: Optional single equipment record chosen in the first round.
+
+        Returns:
+            Standard image response with equipment, panel data and template.
+        """
+        path = "/calcd/attribute"
+        params = {
+            "server": server,
+            "name": name,
+            "format": "calcd",
+            "token": self.token,
+        }
+        if selected is not None:
+            record = (
+                next(iter(selected.values()))
+                if isinstance(selected, dict) and len(selected) == 1
+                else None
+            )
+            if (
+                not isinstance(record, dict)
+                or not record.get("kungfuName")
+                or not record.get("equipType")
+            ):
+                result = self._init_return_data()
+                result["msg"] = "装备选项数据格式异常"
+                return result
+            server = record.get("serverName") or server
+            name = record.get("roleName") or name
+            path = "/calcd/detail"
+            params.update(
+                server=server,
+                name=name,
+                kungfu=record["kungfuName"],
+                type=record["equipType"],
+            )
+
+        async def processor(data: Any, return_data: dict[str, Any]) -> None:
+            if not isinstance(data, dict) or not data:
+                return_data["msg"] = "未获取到角色属性数据"
+                return
+
+            payload = dict(data)
+            for field in (
+                "zoneName",
+                "forceName",
+                "kungfuName",
+                "kungfuType",
+                "bodyName",
+                "campName",
+                "tongName",
+                "equipType",
+            ):
+                payload.setdefault(field, "")
+            payload["serverName"] = data.get("serverName") or server
+            payload["roleName"] = data.get("roleName") or name
+            payload["attributeTime"] = format_time(data.get("cacheTime")) or "暂无记录"
+            payload["equipList"] = [
+                item for item in (data.get("equipList") or []) if isinstance(item, dict)
+            ]
+            panel = [
+                item
+                for item in (data.get("panelList") or [])
+                if isinstance(item, dict) and item.get("name")
+            ]
+            basic_names = {"会心等级", "破防等级", "无双等级", "破招值"}
+            payload["basicPanel"] = [
+                item for item in panel if item["name"] in basic_names
+            ]
+            payload["detailPanel"] = [
+                item for item in panel if item["name"] not in basic_names
+            ]
+            payload["cardUrl"] = ""
+            try:
+                card, _ = await self._cached_request(
+                    "/card/record",
+                    {
+                        "server": payload["serverName"],
+                        "name": payload["roleName"],
+                        "token": self.token,
+                    },
+                )
+                if isinstance(card, dict):
+                    payload["cardUrl"] = card.get("showAvatar") or ""
+            except Exception:
+                logger.warning("获取角色属性附带名片失败，继续展示属性与装备")
+            return_data["data"] = payload
+
+        result = await self._request_api(
+            path=path,
+            params=params,
+            processor=processor,
+            template="shuxing.html",
+        )
+        if result["code"] == 200 and not result["data"]:
+            result["code"] = 0
+        return result
 
     async def jueshemingpian(self, server: str, name: str) -> Dict[str, Any]:
         """名片缓存"""

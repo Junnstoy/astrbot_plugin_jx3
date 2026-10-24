@@ -31,7 +31,7 @@ PLUGIN_NAME = "astrbot_plugin_jx3"
     "astrbot_plugin_jx3",
     "fxdyz",
     "聚合剑网三游戏数据，提供查询、团队管理、图片渲染、本地避雷和实时事件推送。",
-    "3.5.2",
+    "3.5.3",
     "https://github.com/qsc20001102/astrbot_plugin_jx3",
 )
 class Jx3ApiPlugin(Star):
@@ -310,6 +310,8 @@ class Jx3ApiPlugin(Star):
             "百战": self.jx3cmd.baizhan,
             "成就": self.jx3cmd.chengjiu,
             "角色": self.jx3cmd.jueshe,
+            "属性": self.jx3cmd.shuxing,
+            "装备": self.jx3cmd.zhuangbei,
             "阵眼": self.jx3cmd.zhenyan,
             "配装": self.jx3cmd.peizhuang,
             "资历排行": self.jx3cmd.zilipaixing,
@@ -400,16 +402,41 @@ class Jx3ApiPlugin(Star):
         return text.split()
 
     def resolve_command(self, event: AstrMessageEvent):
-        """先遵循宿主的唤醒判定，再解析插件前缀与指令。"""
-        if not event.is_at_or_wake_command:
-            return None
-        # 宿主已按当前会话的配置剥离唤醒头；回看原文会绕过这一层规则。
-        parts = self.parse_message(event.message_str)
-        if not parts:
-            return None
-        cmd, *args = parts
-        handler = self.command_map.get(cmd)
-        return (cmd, args, handler) if handler else None
+        """Resolve a command using the configured wake and prefix rules.
+
+        Args:
+            event: Message event with processed and original text.
+
+        Returns:
+            Command name, arguments and handler, or None if no command matches.
+        """
+        if self.prefix.get("follow_astrbot_wake", False):
+            if not event.is_at_or_wake_command:
+                return None
+            texts = (event.message_str,)
+        else:
+            # Legacy mode also checks text before the host stripped its wake prefix.
+            texts = (
+                event.message_str,
+                getattr(event.message_obj, "message_str", ""),
+            )
+
+        seen = set()
+        for text in texts:
+            if not isinstance(text, str):
+                continue
+            text = text.strip()
+            if not text or text in seen:
+                continue
+            seen.add(text)
+            parts = self.parse_message(text)
+            if not parts:
+                continue
+            cmd, *args = parts
+            handler = self.command_map.get(cmd)
+            if handler:
+                return cmd, args, handler
+        return None
 
     async def _prepare_server_args(
         self,

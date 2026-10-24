@@ -38,6 +38,7 @@ class MessageBuilder:
             "xiaoyao", "huajia", "zhuangshi", "qiwu", "baishi", "shoutu",
             "tuanduizhaomu", "tuanzhang", "tuanpai", "zhuangtai", "fubeng",
             "diaoluo", "hong", "zili", "jiaoyihang", "bilei_all", "bilei_select",
+            "shuxing", "zhuangbei",
         }
     )
 
@@ -494,11 +495,30 @@ class MessageBuilder:
             logger.error(f"功能函数执行错误: {e}")
             await event.send(event.plain_result("猪脑过载，请稍后再试"))
 
+    async def handler_plain_image_msg(
+        self,
+        event: AstrMessageEvent,
+        action1,
+        action2,
+        result_handler=None,
+        timeout: int = 15,
+    ):
+        """Run a numbered menu and send the selected second-round result.
 
-    async def handler_plain_image_msg(self, event: AstrMessageEvent, action1, action2, result_handler=None, timeout: int = 15):
-        """通用两轮会话：首轮数字键值对裁剪后交给次轮函数。"""
+        Args:
+            event: Message event starting the selection session.
+            action1: Async menu provider returning numbered options, optionally
+                wrapped with a title and structured option labels.
+            action2: Async query receiving the single selected option.
+            result_handler: Optional result sender; defaults to cached images.
+            timeout: Seconds to wait before selecting the first option.
+        """
         try:
             option_map = await action1()
+            menu_title = ""
+            if isinstance(option_map, dict) and "options" in option_map:
+                menu_title = str(option_map.get("title") or "")
+                option_map = option_map["options"]
             if not isinstance(option_map, dict) or not option_map:
                 await event.send(event.plain_result("未搜索到可选内容"))
                 return
@@ -508,18 +528,16 @@ class MessageBuilder:
                 await event.send(event.plain_result("选项序号格式异常"))
                 return
 
-            menu_lines = [f"请选择序号（{timeout}后自动选择第一条）"]
+            menu_lines = [menu_title or f"请选择序号（{timeout}后自动选择第一条）"]
             menu_lines.extend(
-                f"{key}、{label}"
+                f"{key}、{label.get('label', '') if isinstance(label, dict) else label}"
                 for key, label in options.items()
             )
             await event.send(event.plain_result("\n".join(menu_lines)))
             user_id = event.get_sender_id()
             send_result = result_handler or self.T2I_image_msg
             cache_name = self.cache.current_command() if self.cache else ""
-            cache_variant = (
-                self.cache.current_command_signature() if self.cache else ""
-            )
+            cache_variant = self.cache.current_command_signature() if self.cache else ""
 
             async def send_selected(
                 target_event: AstrMessageEvent,
@@ -767,6 +785,32 @@ class MessageBuilder:
     async def  zhueevent(self, event: AstrMessageEvent, server: str):
         """ 诛恶事件 服务器"""
         return await self.T2I_image_msg(event, lambda: self.jx3api.zhueevent(server,20))
+
+    async def shuxing(self, event: AstrMessageEvent, server: str, name: str):
+        """Send the role's equipment and attribute panel.
+
+        Args:
+            event: Message event receiving the rendered image.
+            server: Server name after session binding and alias resolution.
+            name: Role name to query.
+        """
+        return await self.T2I_image_msg(
+            event, lambda: self.jx3api.shuxing(server, name)
+        )
+
+    async def zhuangbei(self, event: AstrMessageEvent, server: str, name: str):
+        """Select a recorded equipment set and render its attributes.
+
+        Args:
+            event: Message event starting the two-round session.
+            server: Server name after session binding and alias resolution.
+            name: Role name whose equipment records are queried.
+        """
+        return await self.handler_plain_image_msg(
+            event,
+            lambda: self.jx3api.zhuangbei_menu(server, name),
+            lambda selected: self.jx3api.shuxing(server, name, selected),
+        )
 
     async def  jueshemingpian(self, event: AstrMessageEvent, server: str , name: str , ):
         """ 名片 服务器 角色 """

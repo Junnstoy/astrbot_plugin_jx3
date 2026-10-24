@@ -1,0 +1,112 @@
+{# template-title: 角色属性 #}
+
+{% macro panel_rows(items) %}
+{% for item in items %}
+<div class="attribute-row">
+    <span>{{ item.name | replace('等级', '') }}</span>
+    <strong>{% if item.percent is defined and item.percent is not none %}{{ '%.2f' | format(item.percent | float) }}%{% else %}{{ '{:,}'.format(item.value | default(0, true) | int) }}{% endif %}</strong>
+</div>
+{% else %}
+<div class="empty-state">暂无属性数据</div>
+{% endfor %}
+{% endmacro %}
+
+<div class="container attribute-page">
+    <header class="header attribute-header">
+        <div>
+            <div class="attribute-eyebrow">角色属性 · 装备档案</div>
+            <h1>{{ roleName }}</h1>
+            <div class="meta">{{ zoneName or '未知大区' }} · {{ serverName }} · {{ equipType or '暂无配装类型' }}</div>
+        </div>
+        <div class="attribute-heading-meta">
+            <div class="attribute-kungfu">
+                {% if icons.sect.get(kungfuName) or icons.sect.get(forceName) %}
+                <img class="force-icon" src="{{ icons.sect.get(kungfuName) or icons.sect.get(forceName) }}" alt="{{ forceName }}">
+                {% endif %}
+                <strong>{{ kungfuName or '未知心法' }}</strong>
+                {% if kungfuType %}<span class="tag">{{ kungfuType }}</span>{% endif %}
+            </div>
+            <div class="meta">装备更新：{{ attributeTime }}</div>
+        </div>
+    </header>
+
+    <div class="attribute-layout">
+        <aside class="attribute-sidebar">
+            <section class="panel attribute-panel">
+                <h2 class="section-title">角色信息</h2>
+                {% for label, value in [('门派', forceName), ('心法', kungfuName), ('体型', bodyName), ('阵营', campName), ('帮会', tongName)] %}
+                <div class="attribute-row"><span>{{ label }}</span><strong>{{ value or '暂无' }}</strong></div>
+                {% endfor %}
+            </section>
+            <section class="panel attribute-panel">
+                <h2 class="section-title">基础属性</h2>
+                {{ panel_rows(basicPanel) }}
+            </section>
+            <section class="panel attribute-panel">
+                <h2 class="section-title">详细属性</h2>
+                {{ panel_rows(detailPanel) }}
+            </section>
+            <section class="panel attribute-panel attribute-card-panel">
+                <h2 class="section-title">角色名片</h2>
+                {% if cardUrl %}
+                <img class="attribute-card" src="{{ cardUrl }}" alt="{{ roleName }}的角色名片">
+                {% else %}
+                <div class="empty-state attribute-card-empty">暂未获取到角色名片</div>
+                {% endif %}
+            </section>
+        </aside>
+
+        <main class="attribute-main">
+            <section class="panel attribute-score">
+                <div><span class="attribute-score-label">装备总分</span><strong class="point-value">{{ '{:,}'.format(equipScore | default(0, true) | int) }}</strong></div>
+                <div class="attribute-score-meta"><strong>{{ equipType or '装备一览' }}</strong><span>共 {{ equipList | length }} 件装备</span></div>
+            </section>
+            <section class="panel attribute-equipment">
+                <div class="attribute-equipment-header"><h2 class="section-title">装备详情</h2><span>属性 / 附魔 / 精炼与镶嵌</span></div>
+                {% for item in equipList %}
+                {% set special = item.itemPlus == '特效' %}
+                {% set effect = namespace(text='') %}
+                {% for magic in item.itemMagic or [] %}
+                {% if magic.itemDesc and not effect.text %}{% set effect.text = magic.itemDesc %}{% endif %}
+                {% endfor %}
+                <article class="equipment-row{% if special %} equipment-row--special{% endif %}">
+                    <div class="equipment-icon">
+                        {% if item.iconId %}<img class="equipment-icon-image" src="https://icon.jx3box.com/icon/{{ item.iconId }}.png" alt="{{ item.itemName }}">{% endif %}
+                        <img class="equipment-icon-frame" src="https://img.jx3box.com/image/item/{{ 'orange.gif' if special else 'purple.png' }}" alt="{{ '特效' if special else '普通' }}装备边框">
+                    </div>
+                    <div class="equipment-info">
+                        <div class="equipment-name-line"><strong class="equipment-name">{{ item.itemName or '未知装备' }}</strong><span class="equipment-level">{{ '{:,}'.format(item.itemLevel | default(0, true) | int) }}品</span>{% if special %}<span class="tag equipment-special">特效</span>{% endif %}</div>
+                        <div class="equipment-magic">{{ (item.magicType or '无属性') | replace(',', ' · ') }}</div>
+                        {% if effect.text %}<div class="equipment-effect" title="{{ effect.text }}">{{ effect.text | replace('\n', ' ') }}</div>{% elif item.itemSource %}<div class="equipment-source">{{ item.itemSource | replace(',', ' · ') }}</div>{% endif %}
+                    </div>
+                    <div class="equipment-enchants">
+                        {% if item.colorDiamond is mapping and item.colorDiamond %}
+                        <div class="equipment-enchant equipment-enchant--stone">
+                            {% if item.colorDiamond.iconId %}<img src="https://icon.jx3box.com/icon/{{ item.colorDiamond.iconId }}.png" alt="五彩石">{% endif %}
+                            <span>{{ item.colorDiamond.itemName }}</span>
+                        </div>
+                        {% endif %}
+                        {% if item.minEnchant is mapping and item.minEnchant %}<div class="equipment-enchant"><span class="enchant-marker">附</span><span>{{ item.minEnchant.itemName }}</span></div>{% endif %}
+                        {% if item.maxEnchant is mapping and item.maxEnchant %}<div class="equipment-enchant equipment-enchant--major"><span class="enchant-marker">大</span><span>{{ item.maxEnchant.itemName }}</span></div>{% endif %}
+                    </div>
+                    <div class="equipment-upgrades">
+                        {% set strength = item.strengthLevel | default(0, true) | int %}
+                        {% set maximum = item.maxStrengthLevel | default(0, true) | int %}
+                        {% if maximum %}
+                        <div class="equipment-stars" aria-label="精炼 {{ strength }}/{{ maximum }}">{% for index in range(maximum) %}<span{% if index >= strength %} class="equipment-star--empty"{% endif %}>★</span>{% endfor %}</div>
+                        <div class="equipment-strength">精炼 {{ strength }}/{{ maximum }}</div>
+                        {% endif %}
+                        <div class="equipment-diamonds">
+                            {% for stone in item.mountDiamond or [] %}
+                            <img src="https://icon.jx3box.com/icon/{{ stone.iconId }}.png" alt="{{ stone.itemName }}" title="{{ stone.itemName }}">
+                            {% endfor %}
+                        </div>
+                    </div>
+                </article>
+                {% else %}
+                <div class="empty-state">暂无装备数据</div>
+                {% endfor %}
+            </section>
+        </main>
+    </div>
+</div>

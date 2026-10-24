@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 import base64
 import os
 
-from astrbot import logger
+from astrbot.api import logger
 
 from .template import load_template
     

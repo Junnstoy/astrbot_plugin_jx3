@@ -1,0 +1,345 @@
+.attribute-page {
+    --attribute-gap: 16px;
+}
+
+.attribute-header,
+.attribute-kungfu,
+.attribute-score,
+.attribute-equipment-header,
+.equipment-name-line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.attribute-header {
+    margin-bottom: var(--attribute-gap);
+}
+
+.jx3-template .attribute-header h1 {
+    margin: 5px 0 10px;
+    text-align: left;
+    letter-spacing: 0.03em;
+}
+
+.attribute-eyebrow,
+.attribute-score-label {
+    color: var(--jx3-gold);
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+}
+
+.attribute-heading-meta {
+    flex: 0 0 auto;
+    max-width: 40%;
+    text-align: right;
+}
+
+.attribute-header > div:first-child {
+    flex: 1;
+    min-width: 0;
+}
+
+.attribute-kungfu {
+    justify-content: flex-end;
+    margin-bottom: 10px;
+    font-size: 24px;
+}
+
+.attribute-kungfu .force-icon {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+    border-radius: 50%;
+}
+
+.attribute-layout {
+    display: grid;
+    grid-template-columns: 300px minmax(0, 1fr);
+    gap: var(--attribute-gap);
+    align-items: stretch;
+}
+
+.attribute-sidebar,
+.attribute-main {
+    display: flex;
+    flex-direction: column;
+    gap: var(--attribute-gap);
+    min-width: 0;
+}
+
+.attribute-panel {
+    padding: 18px 20px;
+}
+
+.jx3-template--shuxing .section-title {
+    margin: 0 0 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--jx3-border-soft);
+    font-size: 21px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+}
+
+.attribute-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 4px 0;
+    font-size: 18px;
+    line-height: 1.5;
+}
+
+.attribute-row > span {
+    color: var(--jx3-text-muted);
+}
+
+.attribute-row > strong {
+    max-width: 65%;
+    text-align: right;
+    overflow-wrap: anywhere;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.attribute-score {
+    padding: 18px 24px;
+}
+
+.attribute-score-label {
+    display: block;
+}
+
+.attribute-score .point-value {
+    display: block;
+    font-size: 44px;
+    line-height: 1.3;
+    font-variant-numeric: tabular-nums;
+}
+
+.attribute-score-meta {
+    display: grid;
+    gap: 6px;
+    text-align: right;
+}
+
+.attribute-score-meta > span,
+.attribute-equipment-header > span {
+    color: var(--jx3-text-muted);
+    font-size: 17px;
+}
+
+.attribute-equipment {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    padding: 18px 20px 8px;
+}
+
+.attribute-equipment-header {
+    margin-bottom: 4px;
+}
+
+.attribute-equipment-header .section-title {
+    margin: 0;
+    padding-bottom: 0;
+    border: 0;
+}
+
+.equipment-row {
+    display: grid;
+    flex: 1 0 112px;
+    min-height: 112px;
+    grid-template-columns: 64px minmax(0, 1.05fr) minmax(0, 1fr) 132px;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 0;
+    border-top: 1px solid var(--jx3-border-faint);
+}
+
+.attribute-equipment-header + .equipment-row {
+    margin-top: 10px;
+}
+
+.equipment-icon {
+    position: relative;
+    width: 64px;
+    height: 64px;
+    background: var(--jx3-surface-muted);
+}
+
+.equipment-icon-image,
+.equipment-icon-frame {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.equipment-icon-image {
+    padding: 3px;
+}
+
+.equipment-name-line {
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    gap: 2px 9px;
+    line-height: 1.5;
+}
+
+.equipment-name {
+    min-width: 0;
+    font-size: 19px;
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.equipment-level,
+.equipment-special {
+    flex-shrink: 0;
+}
+
+.equipment-info {
+    min-width: 0;
+}
+
+.equipment-row--special .equipment-name {
+    color: var(--jx3-gold);
+}
+
+.equipment-level,
+.equipment-source,
+.equipment-strength {
+    color: var(--jx3-text-muted);
+    font-size: 15px;
+}
+
+.equipment-magic {
+    margin-top: 3px;
+    color: var(--jx3-text-secondary);
+    font-size: 16px;
+}
+
+.equipment-effect {
+    color: var(--jx3-red);
+    font-size: 15px;
+    line-height: 1.55;
+}
+
+.equipment-effect,
+.equipment-magic,
+.equipment-source,
+.equipment-enchant > span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.equipment-enchants {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+}
+
+.equipment-enchant {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    color: var(--jx3-green);
+    font-size: 15px;
+    line-height: 1.6;
+}
+
+.equipment-enchant > span:last-child {
+    min-width: 0;
+}
+
+.equipment-enchant > img,
+.enchant-marker {
+    width: 20px;
+    height: 20px;
+    margin-top: 2px;
+    flex: 0 0 20px;
+}
+
+.enchant-marker {
+    border: 1px solid currentColor;
+    border-radius: 3px;
+    font-size: 12px;
+    text-align: center;
+    line-height: 18px;
+}
+
+.equipment-enchant--stone {
+    color: var(--jx3-purple);
+}
+
+.equipment-enchant--major {
+    color: var(--jx3-red);
+}
+
+.equipment-upgrades {
+    text-align: right;
+}
+
+.equipment-stars {
+    color: var(--jx3-gold);
+    font-size: 20px;
+    letter-spacing: -1px;
+    white-space: nowrap;
+    line-height: 1.4;
+}
+
+.equipment-star--empty {
+    color: var(--jx3-border-faint);
+}
+
+.equipment-diamonds {
+    display: flex;
+    justify-content: flex-end;
+    gap: 4px;
+    margin-top: 7px;
+}
+
+.equipment-diamonds > img {
+    width: 22px;
+    height: 22px;
+    border: 1px solid var(--jx3-border-soft);
+}
+
+.attribute-page .tag {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: var(--jx3-radius-sm);
+    font-size: 14px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.attribute-card {
+    display: block;
+    width: 100%;
+    max-height: 420px;
+    object-fit: contain;
+    border-radius: var(--jx3-radius-sm);
+}
+
+.attribute-card-empty {
+    flex: 1;
+    min-height: 180px;
+    display: grid;
+    place-content: center;
+    text-align: center;
+}
+
+.attribute-card-panel {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+}

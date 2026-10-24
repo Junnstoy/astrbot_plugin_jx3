@@ -26,8 +26,11 @@ API_ENDPOINTS: tuple[str, ...] = (
     "/arena/schools",
     "/auction/records",
     "/battle/records",
-    "/card/cached",
+    "/calcd/attribute",
+    "/calcd/detail",
+    "/calcd/records",
     "/card/random",
+    "/card/record",
     "/card/records",
     "/castle/status",
     "/chat/records",
@@ -243,6 +246,24 @@ class CacheService:
         await self._sqlite.execute(
             "CREATE INDEX IF NOT EXISTS idx_image_cache_name ON image_render_cache(cache_name)"
         )
+        # Preserve endpoint-specific TTLs without reusing the retired API's payloads.
+        async with self._sqlite.transaction():
+            await self._sqlite.execute(
+                """
+                INSERT OR IGNORE INTO cache_settings(cache_type, cache_name, ttl_seconds)
+                SELECT cache_type, ?, ttl_seconds FROM cache_settings
+                WHERE cache_type='api' AND cache_name=?
+                """,
+                ("/card/record", "/card/cached"),
+            )
+            await self._sqlite.delete(
+                "cache_settings",
+                "cache_type='api' AND cache_name=?",
+                ("/card/cached",),
+            )
+            await self._sqlite.delete(
+                "api_response_cache", "endpoint=?", ("/card/cached",)
+            )
         await self._load_settings()
         await self._load_limits()
         async with self._api_storage_lock:

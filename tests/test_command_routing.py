@@ -29,7 +29,9 @@ def load_dispatch_plugin(source_path: Path):
     plugin.body = methods
     module = ast.Module(body=[plugin], type_ignores=[])
     namespace = {"AstrMessageEvent": object, "logger": Mock()}
-    exec(compile(ast.fix_missing_locations(module), str(source_path), "exec"), namespace)
+    exec(
+        compile(ast.fix_missing_locations(module), str(source_path), "exec"), namespace
+    )
     return namespace["Jx3ApiPlugin"]
 
 
@@ -38,7 +40,11 @@ class CommandRoutingTest(unittest.IsolatedAsyncioTestCase):
 
     def setUp(self):
         self.plugin = self.plugin_class()
-        self.plugin.prefix = {"enable": True, "text": "jx3"}
+        self.plugin.prefix = {
+            "follow_astrbot_wake": True,
+            "enable": True,
+            "text": "jx3",
+        }
         self.handler = Mock()
         self.plugin.command_map = {"日常": self.handler}
 
@@ -73,11 +79,56 @@ class CommandRoutingTest(unittest.IsolatedAsyncioTestCase):
         event = self.event("普通聊天", original="jx3 日常")
         self.assertIsNone(self.plugin.resolve_command(event))
 
+    def test_missing_wake_setting_defaults_to_legacy_mode(self):
+        self.plugin.prefix.pop("follow_astrbot_wake")
+        self.assertEqual(
+            self.plugin.resolve_command(self.event("jx3 日常", awake=False)),
+            ("日常", [], self.handler),
+        )
+
+    def test_legacy_mode_restores_original_text_fallback(self):
+        self.plugin.prefix["follow_astrbot_wake"] = False
+        event = self.event("日常 梦江南", awake=False, original="jx3 日常 梦江南")
+        self.assertEqual(
+            self.plugin.resolve_command(event), ("日常", ["梦江南"], self.handler)
+        )
+
+    def test_legacy_mode_prefers_matching_processed_text(self):
+        self.plugin.prefix["follow_astrbot_wake"] = False
+        event = self.event("jx3 日常 梦江南", original="jx3 日常 长安城")
+        self.assertEqual(
+            self.plugin.resolve_command(event), ("日常", ["梦江南"], self.handler)
+        )
+
+    def test_wake_gate_and_plugin_prefix_are_independent(self):
+        for follow_wake in (False, True):
+            for enable_prefix in (False, True):
+                for awake in (False, True):
+                    with self.subTest(
+                        follow_wake=follow_wake,
+                        enable_prefix=enable_prefix,
+                        awake=awake,
+                    ):
+                        self.plugin.prefix["follow_astrbot_wake"] = follow_wake
+                        self.plugin.prefix["enable"] = enable_prefix
+                        text = "jx3 日常 梦江南" if enable_prefix else "日常 梦江南"
+                        event = self.event(text, awake=awake)
+                        expected = (
+                            None
+                            if follow_wake and not awake
+                            else ("日常", ["梦江南"], self.handler)
+                        )
+                        self.assertEqual(self.plugin.resolve_command(event), expected)
+                        if enable_prefix:
+                            self.assertIsNone(
+                                self.plugin.resolve_command(
+                                    self.event("日常 梦江南", awake=awake)
+                                )
+                            )
+
     def test_disabled_prefix_does_not_disable_host_wake_gate(self):
         self.plugin.prefix["enable"] = False
-        self.assertIsNone(
-            self.plugin.resolve_command(self.event("日常", awake=False))
-        )
+        self.assertIsNone(self.plugin.resolve_command(self.event("日常", awake=False)))
         self.assertEqual(
             self.plugin.resolve_command(self.event("日常", original="/日常")),
             ("日常", [], self.handler),
@@ -89,9 +140,7 @@ class CommandRoutingTest(unittest.IsolatedAsyncioTestCase):
             self.plugin.resolve_command(self.event("日常")),
             ("日常", [], self.handler),
         )
-        self.assertIsNone(
-            self.plugin.resolve_command(self.event("日常", awake=False))
-        )
+        self.assertIsNone(self.plugin.resolve_command(self.event("日常", awake=False)))
 
     def test_whitespace_empty_and_unrelated_messages(self):
         for text in ("", "  ", "jx3", "jx3 不存在", "普通聊天"):
@@ -106,30 +155,42 @@ class CommandRoutingTest(unittest.IsolatedAsyncioTestCase):
         event = self.event("jx3 日常", awake=False)
         self.plugin.session_control = Mock()
         self.plugin._call_with_auto_args = AsyncMock()
-        self.assertEqual([result async for result in self.plugin.on_all_message(event)], [])
+        self.assertEqual(
+            [result async for result in self.plugin.on_all_message(event)], []
+        )
         event.stop_event.assert_not_called()
         event.should_call_llm.assert_not_called()
         self.plugin.session_control.is_allowed.assert_not_called()
         self.plugin._call_with_auto_args.assert_not_awaited()
 
-    async def test_awakened_command_dispatches_once(self):
-        event = self.event("jx3 日常 梦江南", original="/jx3 日常 梦江南")
-        self.plugin.session_control = SimpleNamespace(is_allowed=Mock(return_value=True))
-        self.plugin._prepare_server_args = AsyncMock(return_value=["梦江南"])
-        self.plugin._prepare_kungfu_args = Mock(side_effect=lambda handler, args: args)
-        self.plugin.cache = Mock()
-        self.plugin._call_with_auto_args = AsyncMock(return_value="查询结果")
+    async def test_command_dispatches_once_in_both_wake_modes(self):
+        for follow_wake in (False, True):
+            with self.subTest(follow_wake=follow_wake):
+                self.plugin.prefix["follow_astrbot_wake"] = follow_wake
+                event = self.event(
+                    "jx3 日常 梦江南", awake=follow_wake, original="/jx3 日常 梦江南"
+                )
+                self.plugin.session_control = SimpleNamespace(
+                    is_allowed=Mock(return_value=True)
+                )
+                self.plugin._prepare_server_args = AsyncMock(return_value=["梦江南"])
+                self.plugin._prepare_kungfu_args = Mock(
+                    side_effect=lambda handler, args: args
+                )
+                self.plugin.cache = Mock()
+                self.plugin._call_with_auto_args = AsyncMock(return_value="查询结果")
 
-        self.assertEqual(
-            [result async for result in self.plugin.on_all_message(event)], ["查询结果"]
-        )
-        event.stop_event.assert_called_once()
-        self.plugin._call_with_auto_args.assert_awaited_once_with(
-            self.handler, event, ["梦江南"]
-        )
-        self.plugin.cache.leave_command.assert_called_once_with(
-            self.plugin.cache.enter_command.return_value
-        )
+                self.assertEqual(
+                    [result async for result in self.plugin.on_all_message(event)],
+                    ["查询结果"],
+                )
+                event.stop_event.assert_called_once()
+                self.plugin._call_with_auto_args.assert_awaited_once_with(
+                    self.handler, event, ["梦江南"]
+                )
+                self.plugin.cache.leave_command.assert_called_once_with(
+                    self.plugin.cache.enter_command.return_value
+                )
 
 
 if __name__ == "__main__":
