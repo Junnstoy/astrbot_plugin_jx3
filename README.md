@@ -1,7 +1,5 @@
 # astrbot_plugin_jx3
 
-剑三指令先遵循当前 AstrBot 配置的唤醒条件，再匹配插件的「指令前缀」（`prefix`）。例如配置文件唤醒头为 `/`、插件前缀为 `jx3`，发送 `/jx3 日常`；插件前缀关闭时发送 `/日常`。多个机器人可分别绑定不同的 AstrBot 配置文件，插件无需额外配置平台 ID。@机器人、回复机器人和私聊按 AstrBot 本身的唤醒设置处理。
-
 <p align="center">
   <img src="logo.png" alt="astrbot_plugin_jx3" width="160">
 </p>
