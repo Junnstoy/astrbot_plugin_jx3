@@ -400,16 +400,34 @@ class Jx3ApiPlugin(Star):
         return text.split()
 
     def resolve_command(self, event: AstrMessageEvent):
-        """先遵循宿主的唤醒判定，再解析插件前缀与指令。"""
-        if not event.is_at_or_wake_command:
-            return None
-        # 宿主已按当前会话的配置剥离唤醒头；回看原文会绕过这一层规则。
-        parts = self.parse_message(event.message_str)
-        if not parts:
-            return None
-        cmd, *args = parts
-        handler = self.command_map.get(cmd)
-        return (cmd, args, handler) if handler else None
+        """有宿主唤醒头时遵循唤醒结果，否则沿用原有消息解析流程。"""
+        host_config = self.context.get_config(umo=event.unified_msg_origin)
+        if any(host_config.get("wake_prefix") or []):
+            if not event.is_at_or_wake_command:
+                return None
+            # 宿主已剥离唤醒头；@、回复等是否唤醒同样由宿主判断。
+            texts = (event.message_str,)
+        else:
+            # 未设置唤醒头时完整保留原作者的处理后文本、原文兜底流程。
+            texts = (event.message_str, getattr(event.message_obj, "message_str", ""))
+
+        seen = set()
+        for text in texts:
+            if not isinstance(text, str):
+                continue
+            text = text.strip()
+            if not text or text in seen:
+                continue
+            seen.add(text)
+
+            parts = self.parse_message(text)
+            if not parts:
+                continue
+            cmd, *args = parts
+            handler = self.command_map.get(cmd)
+            if handler:
+                return cmd, args, handler
+        return None
 
     async def _prepare_server_args(
         self,

@@ -29,7 +29,9 @@ def load_dispatch_plugin(source_path: Path):
     plugin.body = methods
     module = ast.Module(body=[plugin], type_ignores=[])
     namespace = {"AstrMessageEvent": object, "logger": Mock()}
-    exec(compile(ast.fix_missing_locations(module), str(source_path), "exec"), namespace)
+    exec(
+        compile(ast.fix_missing_locations(module), str(source_path), "exec"), namespace
+    )
     return namespace["Jx3ApiPlugin"]
 
 
@@ -39,6 +41,9 @@ class CommandRoutingTest(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.plugin = self.plugin_class()
         self.plugin.prefix = {"enable": True, "text": "jx3"}
+        self.plugin.context = SimpleNamespace(
+            get_config=Mock(return_value={"wake_prefix": ["/"]})
+        )
         self.handler = Mock()
         self.plugin.command_map = {"日常": self.handler}
 
@@ -75,9 +80,7 @@ class CommandRoutingTest(unittest.IsolatedAsyncioTestCase):
 
     def test_disabled_prefix_does_not_disable_host_wake_gate(self):
         self.plugin.prefix["enable"] = False
-        self.assertIsNone(
-            self.plugin.resolve_command(self.event("日常", awake=False))
-        )
+        self.assertIsNone(self.plugin.resolve_command(self.event("日常", awake=False)))
         self.assertEqual(
             self.plugin.resolve_command(self.event("日常", original="/日常")),
             ("日常", [], self.handler),
@@ -89,9 +92,7 @@ class CommandRoutingTest(unittest.IsolatedAsyncioTestCase):
             self.plugin.resolve_command(self.event("日常")),
             ("日常", [], self.handler),
         )
-        self.assertIsNone(
-            self.plugin.resolve_command(self.event("日常", awake=False))
-        )
+        self.assertIsNone(self.plugin.resolve_command(self.event("日常", awake=False)))
 
     def test_whitespace_empty_and_unrelated_messages(self):
         for text in ("", "  ", "jx3", "jx3 不存在", "普通聊天"):
@@ -102,11 +103,127 @@ class CommandRoutingTest(unittest.IsolatedAsyncioTestCase):
             ("日常", [], self.handler),
         )
 
+    def test_no_host_prefix_accepts_bare_command_with_plugin_prefix_disabled(self):
+        self.plugin.prefix["enable"] = False
+        for config in (
+            {"wake_prefix": []},
+            {"wake_prefix": [""]},
+            {"wake_prefix": None},
+            {},
+        ):
+            with self.subTest(config=config):
+                self.plugin.context.get_config.return_value = config
+                event = self.event("日常 梦江南", awake=False)
+                self.assertEqual(
+                    self.plugin.resolve_command(event),
+                    ("日常", ["梦江南"], self.handler),
+                )
+                self.plugin.context.get_config.assert_called_with(
+                    umo=event.unified_msg_origin
+                )
+
+    def test_no_host_prefix_keeps_plugin_prefix_requirement(self):
+        self.plugin.context.get_config.return_value = {"wake_prefix": []}
+        self.assertIsNone(self.plugin.resolve_command(self.event("日常", awake=False)))
+        self.assertEqual(
+            self.plugin.resolve_command(self.event("jx3 日常", awake=False)),
+            ("日常", [], self.handler),
+        )
+
+    def test_no_host_prefix_keeps_blank_plugin_prefix_behavior(self):
+        self.plugin.context.get_config.return_value = {"wake_prefix": []}
+        self.plugin.prefix["text"] = "   "
+        self.assertEqual(
+            self.plugin.resolve_command(self.event("日常", awake=False)),
+            ("日常", [], self.handler),
+        )
+
+    def test_no_host_prefix_keeps_original_text_fallback_even_when_awake(self):
+        for config in ({"wake_prefix": []}, {"wake_prefix": [""]}):
+            self.plugin.context.get_config.return_value = config
+            for awake in (False, True):
+                with self.subTest(config=config, awake=awake):
+                    event = self.event(
+                        "普通聊天", awake=awake, original="jx3 日常 梦江南"
+                    )
+                    self.assertEqual(
+                        self.plugin.resolve_command(event),
+                        ("日常", ["梦江南"], self.handler),
+                    )
+
+    def test_no_host_prefix_does_not_add_private_chat_restrictions(self):
+        self.plugin.context.get_config.return_value = {
+            "wake_prefix": [],
+            "platform_settings": {"friend_message_needs_wake_prefix": True},
+        }
+        event = self.event("jx3 日常", awake=False)
+        event.is_private_chat = lambda: True
+        self.assertEqual(self.plugin.resolve_command(event), ("日常", [], self.handler))
+
+    def test_no_host_prefix_keeps_author_behavior_when_at_text_is_absent(self):
+        # Some adapters or failed member lookups omit an @ segment from text.
+        # With no host prefix, preserve the author's text matching in that case.
+        self.plugin.context.get_config.return_value = {"wake_prefix": []}
+        event = self.event("jx3 日常", awake=False)
+        event.get_messages = lambda: [SimpleNamespace(type="At", qq="other-bot")]
+        event.get_self_id = lambda: "test-bot"
+        event.is_private_chat = lambda: False
+        self.assertEqual(self.plugin.resolve_command(event), ("日常", [], self.handler))
+
+    def test_each_session_and_config_change_uses_current_host_settings(self):
+        self.plugin.prefix["enable"] = False
+        self.plugin.context.get_config.side_effect = lambda *, umo: {
+            "wake_prefix": [] if umo == "bare:GroupMessage:example" else ["#"]
+        }
+        bare = self.event("日常", awake=False)
+        bare.unified_msg_origin = "bare:GroupMessage:example"
+        prefixed = self.event("日常", awake=False)
+        self.assertEqual(self.plugin.resolve_command(bare), ("日常", [], self.handler))
+        self.assertIsNone(self.plugin.resolve_command(prefixed))
+        self.plugin.context.get_config.side_effect = None
+        self.plugin.context.get_config.return_value = {"wake_prefix": []}
+        self.assertEqual(
+            self.plugin.resolve_command(prefixed), ("日常", [], self.handler)
+        )
+
+    def test_nonempty_host_prefix_defers_to_host_for_empty_prefix_alternatives(self):
+        self.plugin.context.get_config.return_value = {"wake_prefix": ["/", ""]}
+        self.assertEqual(
+            self.plugin.resolve_command(self.event("jx3 日常", awake=True)),
+            ("日常", [], self.handler),
+        )
+        self.assertIsNone(
+            self.plugin.resolve_command(self.event("jx3 日常", awake=False))
+        )
+        self.assertIsNone(
+            self.plugin.resolve_command(self.event("普通聊天", original="jx3 日常"))
+        )
+
+    def test_literal_whitespace_host_prefix_is_not_reinterpreted_as_disabled(self):
+        self.plugin.context.get_config.return_value = {"wake_prefix": [" "]}
+        self.assertIsNone(
+            self.plugin.resolve_command(self.event("jx3 日常", awake=False))
+        )
+
+    async def test_no_host_prefix_unrelated_message_does_not_stop_other_handlers(self):
+        self.plugin.context.get_config.return_value = {"wake_prefix": []}
+        self.plugin.prefix["enable"] = False
+        event = self.event("普通聊天", awake=False)
+        self.plugin._call_with_auto_args = AsyncMock()
+        self.assertEqual(
+            [result async for result in self.plugin.on_all_message(event)], []
+        )
+        event.stop_event.assert_not_called()
+        event.should_call_llm.assert_not_called()
+        self.plugin._call_with_auto_args.assert_not_awaited()
+
     async def test_rejected_message_does_not_stop_other_plugins_or_llm(self):
         event = self.event("jx3 日常", awake=False)
         self.plugin.session_control = Mock()
         self.plugin._call_with_auto_args = AsyncMock()
-        self.assertEqual([result async for result in self.plugin.on_all_message(event)], [])
+        self.assertEqual(
+            [result async for result in self.plugin.on_all_message(event)], []
+        )
         event.stop_event.assert_not_called()
         event.should_call_llm.assert_not_called()
         self.plugin.session_control.is_allowed.assert_not_called()
@@ -114,7 +231,9 @@ class CommandRoutingTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_awakened_command_dispatches_once(self):
         event = self.event("jx3 日常 梦江南", original="/jx3 日常 梦江南")
-        self.plugin.session_control = SimpleNamespace(is_allowed=Mock(return_value=True))
+        self.plugin.session_control = SimpleNamespace(
+            is_allowed=Mock(return_value=True)
+        )
         self.plugin._prepare_server_args = AsyncMock(return_value=["梦江南"])
         self.plugin._prepare_kungfu_args = Mock(side_effect=lambda handler, args: args)
         self.plugin.cache = Mock()
